@@ -24,8 +24,6 @@ function RunTask {
         [string]$githubRepository,
         [bool]$passPullRequestIdBackToADO,
         [bool]$isForked,
-        [bool]$bypassPolicy,
-        [string]$bypassReason, 
         [bool]$alwaysCreatePR
     )
 
@@ -51,8 +49,6 @@ function RunTask {
         $githubRepository = Get-VstsInput -Name 'githubRepository'
         $passPullRequestIdBackToADO = Get-VstsInput -Name 'passPullRequestIdBackToADO' -AsBool
         $isForked = Get-VstsInput -Name 'isForked' -AsBool
-        $bypassPolicy = Get-VstsInput -Name 'bypassPolicy' -AsBool
-        $bypassReason = Get-VstsInput -Name 'bypassReason'
         $alwaysCreatePR = Get-VstsInput -Name 'alwaysCreatePr' -AsBool
         
         $deleteSourch = $deleteSource
@@ -106,7 +102,7 @@ function RunTask {
 
         foreach($branch in $targetBranches) {
             $pullRequestTitle = $title.Replace('[BRANCH_NAME]', $branch.Replace('refs/heads/',''))
-            CreatePullRequest -teamProject $teamProject -repositoryName $repositoryName -sourceBranch $sourceBranch -targetBranch $branch -title $pullRequestTitle -description $description -reviewers $reviewers -repoType $repoType -isDraft $isDraft -autoComplete $autoComplete -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems -linkWorkItems $linkWorkItems -githubRepository $githubRepository -passPullRequestIdBackToADO $passPullRequestIdBackToADO -isForked $isForked -bypassPolicy $bypassPolicy -bypassReason $bypassReason -alwaysCreatePR $alwaysCreatePR
+            CreatePullRequest -teamProject $teamProject -repositoryName $repositoryName -sourceBranch $sourceBranch -targetBranch $branch -title $pullRequestTitle -description $description -reviewers $reviewers -repoType $repoType -isDraft $isDraft -autoComplete $autoComplete -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems -linkWorkItems $linkWorkItems -githubRepository $githubRepository -passPullRequestIdBackToADO $passPullRequestIdBackToADO -isForked $isForked -alwaysCreatePR $alwaysCreatePR
         }
 
         if ($passPullRequestIdBackToADO) {
@@ -142,13 +138,11 @@ function CreatePullRequest() {
         [string]$githubRepository,
         [bool]$passPullRequestIdBackToADO,
         [bool]$isForked,
-        [bool]$bypassPolicy,
-        [string]$bypassReason, 
         [bool]$alwaysCreatePR
     )
 
     if ($repoType -eq "Azure DevOps") { 
-        CreateAzureDevOpsPullRequest -teamProject $teamProject -repositoryName $repositoryName -sourceBranch $sourceBranch -targetBranch $targetBranch -title $title -description $description -reviewers $reviewers -isDraft $isDraft -autoComplete $autoComplete -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems -linkWorkItems $linkWorkItems -passPullRequestIdBackToADO $passPullRequestIdBackToADO -isForked $isForked -bypassPolicy $bypassPolicy -bypassReason $bypassReason -alwaysCreatePR $alwaysCreatePR
+        CreateAzureDevOpsPullRequest -teamProject $teamProject -repositoryName $repositoryName -sourceBranch $sourceBranch -targetBranch $targetBranch -title $title -description $description -reviewers $reviewers -isDraft $isDraft -autoComplete $autoComplete -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems -linkWorkItems $linkWorkItems -passPullRequestIdBackToADO $passPullRequestIdBackToADO -isForked $isForked  -alwaysCreatePR $alwaysCreatePR
     }
 
     else {
@@ -294,8 +288,6 @@ function CreateAzureDevOpsPullRequest() {
         [string]$repositoryName,
         [bool]$passPullRequestIdBackToADO,
         [bool]$isForked,
-        [bool]$bypassPolicy,
-        [string]$bypassReason, 
         [bool]$alwaysCreatePR
     )
 
@@ -316,8 +308,6 @@ function CreateAzureDevOpsPullRequest() {
     Write-Host "Is Draft Pull Request: $isDraft"
     Write-Host "Auto-Complete: $autoComplete"
     Write-Host "Link Work Items: $linkWorkItems"
-    Write-Host "Bypass: $bypassPolicy"
-    Write-Host "Bypass Reason: $bypassReason"
     Write-Host "DeleteSourceBranch ist set to: $deleteSourch"
 
     if($isForked -eq $False) {
@@ -386,18 +376,6 @@ function CreateAzureDevOpsPullRequest() {
                 SetAutoComplete -teamProject $teamProject -repositoryName $repositoryName -pullRequestId $pullRequestId -buildUserId $currentUserId -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems
             }
 
-            # If set bypass is true 
-            if ($bypassPolicy) {
-                BypassPR -teamProject $teamProject -repositoryName $repositoryName -pullRequestId $pullRequestId -buildUserId $currentUserId -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems -bypassPolicy $bypassPolicy -bypassReason $bypassReason
-                
-                GetPRData -teamProject $teamProject -repositoryName $repositoryName -pullRequestId $pullRequestId | Out-Null
-
-                if ($prData.status -ine "completed") {
-                    sleep 10
-                    Write-Host "Retry Bypass"            
-                    BypassPR -teamProject $teamProject -repositoryName $repositoryName -pullRequestId $pullRequestId -buildUserId $currentUserId -mergeStrategy $mergeStrategy -deleteSourch $deleteSourch -commitMessage $commitMessage -transitionWorkItems $transitionWorkItems -bypassPolicy $bypassPolicy -bypassReason $bypassReason
-                }
-            }
         }
     }
 
@@ -727,63 +705,6 @@ function SetAutoComplete {
     }
     catch {
         Write-Warning "Can't set Auto Complete to PR $pullRequestId."
-        Write-Warning $_
-        Write-Warning $_.Exception.Message
-    }
-}
-
-function BypassPR {
-    [CmdletBinding()]
-    Param
-    (
-        [string]$pullRequestId,
-        [string]$mergeStrategy,
-        [bool]$deleteSourch,
-        [string]$commitMessage,
-        [bool]$transitionWorkItems,
-        [string]$teamProject,
-        [string]$repositoryName,
-        [string]$buildUserId,
-        [bool]$bypassPolicy,
-        [string]$bypassReason
-    )
-
-    $prData = GetPRData -teamProject $teamProject -repositoryName $repositoryName -pullRequestId $pullRequestId
-    $lastCommitId = $prData.lastMergeSourceCommit.commitId
-    $lastCommitUrl = $prData.lastMergeSourceCommit.url
-
-    $body = @{
-        completionOptions     = ""
-        status                = "Completed"
-        lastMergeSourceCommit = @{
-            commitId = "$lastCommitId"
-            url      = "$lastCommitUrl"
-        }
-    }    
-    
-    $options = @{ 
-        mergeStrategy       = "$mergeStrategy" 
-        deleteSourceBranch  = "$deleteSourch"
-        transitionWorkItems = "$transitionWorkItems"
-        mergeCommitMessage  = "$commitMessage"
-        bypassPolicy        = "$bypassPolicy"
-        bypassReason        = "$bypassReason"
-    }
-    $body.completionOptions = $options
-
-    $head = @{ Authorization = "Bearer $global:token" }
-    $jsonBody = ConvertTo-Json $body
-    Write-Debug $jsonBody
-    $url = "$env:System_TeamFoundationCollectionUri$($teamProject)/_apis/git/repositories/$($repositoryName)/pullrequests/$($pullRequestId)?api-version=4.1"
-    Write-Debug $url
-    try {
-        $response = Invoke-RestMethod -Uri $url -Method Patch -Headers $head -Body $jsonBody -ContentType application/json
-        if ($Null -ne $response) {
-            Write-Host "Bypass PR $pullRequestId."
-        }
-    }
-    catch {
-        Write-Warning "Can't Bypass PR $pullRequestId."
         Write-Warning $_
         Write-Warning $_.Exception.Message
     }
